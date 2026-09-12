@@ -243,10 +243,6 @@ def run_variant(variant: dict, all_results: list) -> pd.DataFrame:
     lr_raw.fit(Xr_tr_s, y_tr)
     evaluate(y_te, lr_raw.predict(Xr_te_s), "Logistic Regression - RAW price features", results, key)
 
-    lr_eng = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
-    lr_eng.fit(Xe_tr_s, y_tr)
-    evaluate(y_te, lr_eng.predict(Xe_te_s), "Logistic Regression - ENGINEERED features", results, key)
-
     print("\n" + "=" * 70)
     print("8. MODEL COMPARISON ON ENGINEERED FEATURES")
     print("=" * 70)
