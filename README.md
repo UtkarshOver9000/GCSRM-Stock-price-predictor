@@ -7,7 +7,7 @@
 [![Tests](https://img.shields.io/badge/Tests-12%20Passed-brightgreen.svg)]()
 [![Status](https://img.shields.io/badge/Status-Leakage--Free%20Verified-brightgreen.svg)]()
 
-A production-grade, multi-asset quantitative machine learning system designed to predict **next-day price direction** (Up or Down) across multiple diverse, real-world asset classes (**AAPL, NVDA, TSLA, SPY, JPM, AMZN**) using 5 years of real daily OHLCV market data.
+A production-grade, multi-asset quantitative machine learning system designed to predict **next-day price direction** (Up or Down) across multiple diverse, real-world asset classes using real daily OHLCV market data. The pipeline benchmark evaluates six core assets (**AAPL, NVDA, TSLA, SPY, JPM, AMZN**), while the dashboard also includes additional datasets (**AMD, GOOGL, META, MSFT, QQQ, XOM**).
 
 Equipped with an **Interactive Web Dashboard (`dashboard.html`)**, **Deep-Dive Technical Indicator Charts**, **Backtested Strategy Equity Curves vs. Buy & Hold**, and an **Automated Test Suite**.
 
@@ -22,6 +22,7 @@ Equipped with an **Interactive Web Dashboard (`dashboard.html`)**, **Deep-Dive T
    - **SPDR S&P 500 (`SPY`)**: Broad Macro Market Index
    - **JPMorgan Chase (`JPM`)**: Banking & Financial Services
    - **Amazon (`AMZN`)**: Cloud Infrastructure & E-Commerce
+   - **Additional dashboard assets**: AMD, GOOGL, META, MSFT, QQQ, and XOM
 2. **Interactive Visual Dashboard (`dashboard.html`)**:
    - Built-in responsive financial terminal with live ticker switching.
    - Interactive price chart with green/red prediction signals, toggleable Bollinger Bands, and Moving Averages.
@@ -49,7 +50,10 @@ Equipped with an **Interactive Web Dashboard (`dashboard.html`)**, **Deep-Dive T
 │   ├── TSLA.csv                # Tesla daily OHLCV (5 years, 1,255 trading days)
 │   ├── SPY.csv                 # S&P 500 ETF daily OHLCV (5 years, 1,255 trading days)
 │   ├── JPM.csv                 # JPMorgan Chase daily OHLCV (5 years, 1,255 trading days)
-│   └── AMZN.csv                # Amazon daily OHLCV (5 years, 1,255 trading days)
+│   ├── AMZN.csv                # Amazon daily OHLCV (5 years, 1,255 trading days)
+│   ├── AMD.csv, GOOGL.csv      # Additional semiconductor and search assets
+│   ├── META.csv, MSFT.csv      # Additional platform and software assets
+│   ├── QQQ.csv, XOM.csv        # Nasdaq-100 ETF and energy asset
 ├── outputs/                    # Exported charts and benchmark metrics
 │   ├── technical_deep_dive_AAPL.png
 │   ├── technical_deep_dive_NVDA.png
@@ -99,6 +103,8 @@ To run on a specific real-world stock:
 python run.py --ticker NVDA
 python run.py --ticker TSLA
 python run.py --ticker SPY
+python run.py --ticker JPM
+python run.py --ticker AMZN
 ```
 
 ### 3. Open the Interactive Visual Dashboard
@@ -106,6 +112,9 @@ Simply open `dashboard.html` in any web browser to view the interactive real-tim
 ```powershell
 start dashboard.html
 ```
+
+For Vercel, import this GitHub repository as a static project. The included
+`vercel.json` routes `/` to `index.html` and `/dashboard` to `dashboard.html`.
 
 ### 4. Execute the Automated Test Suite
 ```bash
