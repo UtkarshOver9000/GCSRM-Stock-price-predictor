@@ -1,18 +1,19 @@
 """
-Stock Price Movement Predictor - Production Pipeline
-=====================================================
-Predicts daily price direction (Up / Down) for AAPL from OHLCV data.
+Stock Price Movement Predictor - Multi-Asset Production Pipeline
+================================================================
+Predicts daily price direction (Up / Down) from historical OHLCV data.
 
-Covers four labeling variants:
-  A. Next-day direction (no dead zone) - The rigorous canonical benchmark
-  B. Next-day direction (1% dead zone) - Abstain on noise-level moves
-  C. 5-day direction, overlapping windows - Warning: persistence baseline artifact
-  D. 5-day direction, non-overlapping windows - Fair multi-day evaluation
+Supports:
+  1. Multi-Asset Real World Data: AAPL (Tech), NVDA (AI/Semis), TSLA (High Beta EV),
+     SPY (S&P 500 ETF), JPM (Banking), AMZN (Cloud/Consumer).
+  2. Four Labeling Variants (Strict Next-Day, 1% Dead-Zone, Overlapping 5-Day, Fair Non-Overlapping 5-Day).
+  3. Visual Tools: Technical Deep-Dive (BB, RSI, MACD), Strategy Equity Curve vs. Buy & Hold,
+     Confusion Matrices, ROC Curves, and Cross-Asset Comparison Matrix.
 """
 
 from __future__ import annotations
 
-import sys, os
+import sys, os, argparse
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -39,12 +40,23 @@ from plots import (
     plot_confusion_matrices,
     plot_model_comparison,
     plot_walk_forward_cv,
+    plot_technical_deep_dive,
+    plot_strategy_equity_curve,
+    plot_multi_asset_matrix,
 )
 
 RANDOM_STATE = 42
-DATA_PATH = os.path.join("data", "AAPL.csv")
 TEST_FRACTION = 0.20
 N_CV_FOLDS = 5
+
+TICKER_METADATA = {
+    "AAPL": "Apple Inc. (Mega-Cap Tech)",
+    "NVDA": "NVIDIA Corp. (AI & Semiconductors)",
+    "TSLA": "Tesla Inc. (High-Beta Growth)",
+    "SPY":  "SPDR S&P 500 ETF (Broad Market)",
+    "JPM":  "JPMorgan Chase (Financials / Banking)",
+    "AMZN": "Amazon.com (Consumer / Cloud)",
+}
 
 VARIANTS = [
     {
@@ -90,8 +102,8 @@ CV_MODELS = {
 }
 
 
-def assemble_dataset(horizon: int, threshold: float, stride: int = 1):
-    df = load_ohlcv(DATA_PATH)
+def assemble_dataset(data_path: str = os.path.join("data", "AAPL.csv"), horizon: int = 1, threshold: float = 0.0, stride: int = 1):
+    df = load_ohlcv(data_path)
     engineered = build_engineered_features(df)
     raw = build_raw_price_features(df)
     label = make_label(df, horizon=horizon, threshold=threshold)
@@ -174,33 +186,24 @@ def walk_forward_cv(X_train_scaled, y_train: pd.Series):
     return scores
 
 
-def run_variant(variant: dict, all_results: list) -> pd.DataFrame:
+def run_variant(data_path: str, variant: dict, all_results: list, ticker: str = "AAPL") -> pd.DataFrame:
     key, label = variant["key"], variant["label"]
     horizon = variant["horizon"]
     threshold = variant["threshold"]
     stride = variant.get("stride", 1)
 
     print("\n" + "#" * 78)
-    print(f"# VARIANT {label}")
+    print(f"# [{ticker}] VARIANT {label}")
     print(f"# Horizon={horizon} trading day(s) | Threshold={threshold:.2%} | Stride={stride}")
     print("#" * 78)
 
-    print("\n" + "=" * 70)
-    print("1. LOADING DATA & CONSTRUCTING FEATURES")
-    print("=" * 70)
-    full, eng_cols, raw_cols, n_dropped = assemble_dataset(horizon, threshold, stride)
+    full, eng_cols, raw_cols, n_dropped = assemble_dataset(data_path, horizon, threshold, stride)
     print(f"  Usable rows: {len(full)} (dropped {n_dropped} warm-up / undefined / dead-zone rows)")
-    print(f"  Engineered features ({len(eng_cols)}): {eng_cols[:5]} ... (total {len(eng_cols)})")
+    print(f"  Engineered features ({len(eng_cols)}): {eng_cols[:4]} ... (total {len(eng_cols)})")
     print(f"  Raw-price features   ({len(raw_cols)}): {raw_cols}")
 
-    print("\n" + "=" * 70)
-    print("2. CLASS BALANCE")
-    print("=" * 70)
     report_class_balance(full["target"], "Full Dataset")
 
-    print("\n" + "=" * 70)
-    print("3. TIME-BASED TRAIN/TEST SPLIT (No Shuffling)")
-    print("=" * 70)
     Xe_tr, Xe_te, y_tr, y_te, train_df, test_df = time_based_split(full, eng_cols)
     Xr_tr, Xr_te, _,    _,    _,        _        = time_based_split(full, raw_cols)
     print(f"  Train: {train_df['Date'].iloc[0].date()} -> {train_df['Date'].iloc[-1].date()} ({len(train_df)} rows)")
@@ -208,25 +211,16 @@ def run_variant(variant: dict, all_results: list) -> pd.DataFrame:
     report_class_balance(y_tr, "Train Split")
     report_class_balance(y_te, "Test Split")
 
-    print("\n" + "=" * 70)
-    print("4. SCALING (StandardScaler fit on TRAIN ONLY)")
-    print("=" * 70)
     Xe_tr_s, Xe_te_s, _ = scale_features(Xe_tr, Xe_te)
     Xr_tr_s, Xr_te_s, _ = scale_features(Xr_tr, Xr_te)
-    print("  Scaler fit strictly on training split; test set transformed with training parameters.")
 
     cv_scores = {}
     if len(y_tr) >= 100:
-        print("\n" + "=" * 70)
-        print("5. WALK-FORWARD CROSS-VALIDATION")
-        print("=" * 70)
         cv_scores = walk_forward_cv(Xe_tr_s, y_tr)
 
     results = []
 
-    print("\n" + "=" * 70)
-    print("6. NAIVE BASELINES")
-    print("=" * 70)
+    # Naive baselines
     majority = y_tr.mode()[0]
     y_maj = np.full(len(y_te), majority, dtype=int)
     evaluate(y_te, y_maj, "Baseline: Majority Class", results, key)
@@ -236,16 +230,12 @@ def run_variant(variant: dict, all_results: list) -> pd.DataFrame:
     valid = y_persist.notna()
     evaluate(y_te.values[valid.values], y_persist[valid].astype(int), "Baseline: Persistence", results, key)
 
-    print("\n" + "=" * 70)
-    print("7. RAW vs ENGINEERED FEATURES (Logistic Regression, Apples-to-Apples)")
-    print("=" * 70)
+    # Raw model
     lr_raw = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
     lr_raw.fit(Xr_tr_s, y_tr)
     evaluate(y_te, lr_raw.predict(Xr_te_s), "Logistic Regression - RAW price features", results, key)
 
-    print("\n" + "=" * 70)
-    print("8. MODEL COMPARISON ON ENGINEERED FEATURES")
-    print("=" * 70)
+    # Engineered models
     trained = {}
     for name, factory in ML_MODELS.items():
         model = factory()
@@ -258,100 +248,127 @@ def run_variant(variant: dict, all_results: list) -> pd.DataFrame:
         trained[name] = (model, y_pred)
         evaluate(y_te, y_pred, f"{name} - ENGINEERED features", results, key)
 
-    print("\n" + "=" * 70)
-    print("9. VARIANT SUMMARY TABLE")
-    print("=" * 70)
     results_df = pd.DataFrame(results).sort_values("accuracy", ascending=False)
+    print("\n--- VARIANT SUMMARY TABLE ---")
     print(results_df.drop(columns="variant").to_string(index=False, float_format=lambda x: f"{x:.4f}"))
 
-    print("\n" + "=" * 70)
-    print("10. HONEST INTERPRETATION")
-    print("=" * 70)
+    # Honest interpretation
     best_row = results_df.iloc[0]
     maj_acc = next(r["accuracy"] for r in results if "Majority" in r["model"])
     persist_acc = next(r["accuracy"] for r in results if "Persistence" in r["model"])
     best_baseline = max(maj_acc, persist_acc)
     lift = best_row["accuracy"] - best_baseline
 
-    print(f"  Best model    : {best_row['model']}")
+    print(f"\n  Best model    : {best_row['model']}")
     print(f"  Best accuracy : {best_row['accuracy']:.4f}")
     print(f"  Best baseline : {best_baseline:.4f}")
     print(f"  Lift over base: {lift:+.4f}")
 
-    if lift < 0.03:
-        print("  -> Lift is small and well within statistical sampling noise.")
-        print("     Consistent with efficient markets / random-walk behavior for next-day moves.")
-    else:
-        print("  -> Noticeable edge over baseline, but must be contextualized by variant specifics.")
-
-    if horizon > 1 and stride == 1:
-        print("  [!] OVERLAPPING WINDOW WARNING: Consecutive 5-day windows share 4 of 5 trading days.")
-        print("      Persistence baseline is inflated to ~83% purely by autocorrelated window construction.")
-        print("      See Variant D for the true, non-overlapping evaluation.")
-
-    if horizon > 1 and stride > 1 and len(y_te) < 100:
-        print(f"  [!] SAMPLE SIZE CAVEAT: Non-overlapping test set has {len(y_te)} observations.")
-        print("      Double-digit percentage point lift is exploratory and requires multi-ticker validation.")
-
-    print("\n" + "=" * 70)
-    print("11. GENERATING VISUALIZATIONS")
-    print("=" * 70)
+    # Generate visual artifacts
     ml_preds = {name: y_pred for name, (_, y_pred) in trained.items()}
     best_ml_name = max(ml_preds, key=lambda n: accuracy_score(y_te, ml_preds[n]))
 
-    p1 = plot_predicted_vs_actual(test_df, y_te.values, ml_preds[best_ml_name], best_ml_name, key, label)
-    print(f"  Saved: {p1}")
-
+    plot_predicted_vs_actual(test_df, y_te.values, ml_preds[best_ml_name], best_ml_name, key, f"{ticker} - {label}")
+    
     rf_model, _ = trained["Random Forest"]
-    p2 = plot_feature_importance(rf_model, eng_cols, key)
-    if p2: print(f"  Saved: {p2}")
+    plot_feature_importance(rf_model, eng_cols, key)
 
     models_proba = {}
     for name, (m, _) in trained.items():
         if hasattr(m, "predict_proba"):
             X_eval = Xe_te_s if "Logistic" in name else Xe_te
             models_proba[name] = m.predict_proba(X_eval)[:, 1]
-    p3 = plot_roc_curves(y_te, models_proba, key)
-    print(f"  Saved: {p3}")
-
-    p4 = plot_confusion_matrices(y_te, ml_preds, key)
-    print(f"  Saved: {p4}")
-
-    p5 = plot_model_comparison(results_df, key, label)
-    print(f"  Saved: {p5}")
+    plot_roc_curves(y_te, models_proba, key)
+    plot_confusion_matrices(y_te, ml_preds, key)
+    plot_model_comparison(results_df, key, f"{ticker} - {label}")
 
     if cv_scores:
-        p6 = plot_walk_forward_cv(cv_scores, key)
-        print(f"  Saved: {p6}")
+        plot_walk_forward_cv(cv_scores, key)
+
+    # For Variant A, also generate strategy equity curve
+    if key == "1day_strict":
+        p_eq = plot_strategy_equity_curve(test_df, y_te.values, ml_preds[best_ml_name], ticker, best_ml_name)
+        print(f"  Saved Equity Curve: {p_eq}")
 
     all_results.extend(results)
     return results_df
 
 
+def run_cross_asset_benchmark():
+    """Evaluates Next-Day direction prediction across all 6 real-world assets."""
+    print("\n" + "=" * 78)
+    print("RUNNING MULTI-ASSET BENCHMARK (Across 6 Diverse Real-World Sectors)")
+    print("=" * 78)
+
+    tickers = ["AAPL", "NVDA", "TSLA", "SPY", "JPM", "AMZN"]
+    summary_records = []
+
+    for t in tickers:
+        p = os.path.join("data", f"{t}.csv")
+        if not os.path.exists(p):
+            continue
+        full, eng_cols, _, _ = assemble_dataset(p, horizon=1, threshold=0.0, stride=1)
+        Xe_tr, Xe_te, y_tr, y_te, _, test_df = time_based_split(full, eng_cols)
+        
+        # Train Random Forest
+        rf = RandomForestClassifier(n_estimators=200, max_depth=4, min_samples_leaf=10, random_state=RANDOM_STATE)
+        rf.fit(Xe_tr, y_tr)
+        y_pred = rf.predict(Xe_te)
+        
+        acc = accuracy_score(y_te, y_pred)
+        maj_acc = max(y_tr.mean(), 1.0 - y_tr.mean())
+        lift = acc - maj_acc
+
+        summary_records.append({
+            "ticker": t,
+            "label": f"{t}\n({TICKER_METADATA.get(t, '').split('(')[-1].replace(')', '')})",
+            "ml_accuracy": acc,
+            "baseline_accuracy": maj_acc,
+            "lift": lift,
+        })
+        print(f"  {t:<6}: ML Acc = {acc:.2%} | Baseline = {maj_acc:.2%} | Lift = {lift:+.2%}")
+
+    df_sum = pd.DataFrame(summary_records)
+    p_mat = plot_multi_asset_matrix(df_sum)
+    print(f"  Saved Multi-Asset Comparison Matrix: {p_mat}")
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Stock Price Movement Predictor")
+    parser.add_argument("--ticker", type=str, default="AAPL", help="Stock ticker symbol (e.g. AAPL, NVDA, TSLA, SPY, JPM, AMZN)")
+    parser.add_argument("--all", action="store_true", help="Run multi-asset benchmark across all downloaded tickers")
+    args = parser.parse_args()
+
+    ticker = args.ticker.upper()
+    data_path = os.path.join("data", f"{ticker}.csv")
+    if not os.path.exists(data_path):
+        print(f"Ticker {ticker} data not found at {data_path}. Defaulting to AAPL.csv")
+        ticker = "AAPL"
+        data_path = os.path.join("data", "AAPL.csv")
+
     os.makedirs("outputs", exist_ok=True)
+
+    # 1. Technical deep-dive for the target ticker
+    print(f"Generating Technical Indicator Deep-Dive for {ticker}...")
+    df_raw = load_ohlcv(data_path)
+    p_deep = plot_technical_deep_dive(df_raw, ticker)
+    print(f"  Saved: {p_deep}")
+
+    # 2. Run all 4 variants for the target ticker
     all_results = []
-
     for variant in VARIANTS:
-        run_variant(variant, all_results)
+        run_variant(data_path, variant, all_results, ticker)
 
-    print("\n" + "#" * 78)
-    print("# CROSS-VARIANT SYNTHESIS (Best Model per Variant)")
-    print("#" * 78)
+    # 3. Save summary CSV
     combined = pd.DataFrame(all_results)
     combined.to_csv(os.path.join("outputs", "results_summary_all_variants.csv"), index=False)
 
-    ml_only = combined[~combined["model"].str.startswith("Baseline")]
-    best_per = ml_only.loc[ml_only.groupby("variant")["accuracy"].idxmax()].copy()
-    lbl_map = {v["key"]: v["label"] for v in VARIANTS}
-    best_per["variant_label"] = best_per["variant"].map(lbl_map)
+    # 4. Multi-asset benchmark across all real stocks
+    run_cross_asset_benchmark()
 
-    print(
-        best_per[["variant_label", "model", "accuracy", "precision", "recall", "f1"]]
-        .to_string(index=False, float_format=lambda x: f"{x:.4f}")
-    )
-
-    print("\nPipeline executed successfully. All metrics and plots saved to ./outputs/")
+    print("\n" + "#" * 78)
+    print(f"# ALL PIPELINES & VISUALIZATIONS GENERATED SUCCESSFULLY FOR {ticker}")
+    print("#" * 78)
 
 
 if __name__ == "__main__":
