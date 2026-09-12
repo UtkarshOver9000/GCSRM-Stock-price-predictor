@@ -1,0 +1,5 @@
+# Stock Price Movement Predictor - Pinned Dependencies
+pandas==2.3.2
+numpy==1.26.4
+scikit-learn==1.8.0
+matplotlib==3.7.2
