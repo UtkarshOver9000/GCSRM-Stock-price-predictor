@@ -88,6 +88,7 @@ Equipped with an **Interactive Web Dashboard (`dashboard.html`)**, **Deep-Dive T
 ## ⚙️ Quickstart
 
 ### 1. Clone & Setup Environment
+
 ```bash
 git clone https://github.com/UtkarshOver9000/GCSRM-Stock-price-predictor.git
 cd GCSRM-Stock-price-predictor
@@ -95,10 +96,13 @@ pip install -r requirements.txt
 ```
 
 ### 2. Run the Full Multi-Asset Pipeline
+
 ```bash
 python run.py
 ```
+
 To run on a specific real-world stock:
+
 ```bash
 python run.py --ticker NVDA
 python run.py --ticker TSLA
@@ -108,7 +112,9 @@ python run.py --ticker AMZN
 ```
 
 ### 3. Open the Interactive Visual Dashboard
+
 Simply open `dashboard.html` in any web browser to view the interactive real-time terminal:
+
 ```powershell
 start dashboard.html
 ```
@@ -117,6 +123,7 @@ For Vercel, import this GitHub repository as a static project. The included
 `vercel.json` routes `/` to `index.html` and `/dashboard` to `dashboard.html`.
 
 ### 4. Execute the Automated Test Suite
+
 ```bash
 python -m pytest -v
 ```
@@ -125,14 +132,14 @@ python -m pytest -v
 
 ## 📊 Cross-Asset Benchmark Results (Real 5-Year Data)
 
-| Ticker | Asset Class / Sector | Test ML Accuracy | Naive Majority Baseline | Lift Over Base |
-| :--- | :--- | :---: | :---: | :---: |
-| **AAPL** | Mega-Cap Tech / Consumer | **55.19%** | 52.80% | **+2.39%** |
-| **NVDA** | AI Hardware / Semiconductors | **50.62%** | 53.32% | -2.70% |
-| **TSLA** | High-Beta Growth / EV | **49.79%** | 50.83% | -1.04% |
-| **SPY** | S&P 500 Broad Market ETF | **53.11%** | 53.32% | -0.21% |
-| **JPM** | Financials & Commercial Banking | **53.53%** | 54.56% | -1.03% |
-| **AMZN** | Cloud Computing & Retail | **50.21%** | 50.62% | -0.41% |
+| Ticker   | Asset Class / Sector            | Test ML Accuracy | Naive Majority Baseline | Lift Over Base |
+| :------- | :------------------------------ | :--------------: | :---------------------: | :------------: |
+| **AAPL** | Mega-Cap Tech / Consumer        |    **55.19%**    |         52.80%          |   **+2.39%**   |
+| **NVDA** | AI Hardware / Semiconductors    |    **50.62%**    |         53.32%          |     -2.70%     |
+| **TSLA** | High-Beta Growth / EV           |    **49.79%**    |         50.83%          |     -1.04%     |
+| **SPY**  | S&P 500 Broad Market ETF        |    **53.11%**    |         53.32%          |     -0.21%     |
+| **JPM**  | Financials & Commercial Banking |    **53.53%**    |         54.56%          |     -1.03%     |
+| **AMZN** | Cloud Computing & Retail        |    **50.21%**    |         50.62%          |     -0.41%     |
 
 ---
 
@@ -146,4 +153,5 @@ python -m pytest -v
 ---
 
 ## 📜 License
+
 Released under the [MIT License](LICENSE).
